@@ -3,7 +3,7 @@ const RepositoryCollection = require('../models/collection')
 const DraftSummary = require('../models/draft_summary')
 const UserModel = require('obojobo-express/server/models/user')
 const { webpackAssetPath } = require('obojobo-express/server/asset_resolver')
-const GeoPattern = require('geopattern')
+const Trianglify = require('trianglify')
 const {
 	checkValidationRules,
 	requireDraftId,
@@ -37,10 +37,10 @@ router.route('/library/module-icon/:moduleId').get((req, res) => {
 		return
 	}
 
-	const pattern = GeoPattern.generate(req.params.moduleId)
+	const pattern = Trianglify({width: 200, height: 200, seed: req.params.moduleId})
 	res.setHeader('ETag', req.params.moduleId)
 	res.setHeader('Content-Type', 'image/svg+xml')
-	res.send(pattern.toString())
+	res.send(pattern.svg({includeNamespace: true}).outerHTML)
 })
 
 router
