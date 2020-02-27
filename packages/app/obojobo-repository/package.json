@@ -41,6 +41,7 @@
 		"react-redux": "^6.0.1",
 		"redux": "^4.0.1",
 		"redux-pack": "^0.1.5",
+		"seedrandom": "^2.3.11",
 		"sass-mq": "^5.0.1"
 	},
 	"jest": {
