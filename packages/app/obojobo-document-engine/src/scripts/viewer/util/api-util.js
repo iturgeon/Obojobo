@@ -1,16 +1,21 @@
 const API = require('./api')
 
 const processJsonResults = res => {
-	return Promise.resolve(res.json()).then(json => {
-		if (json.status === 'error') {
-			console.error(json.value) //eslint-disable-line no-console
+	return Promise.resolve(res.json()).then(data => {
+		if (data.status === 'error') {
+			console.error(data.value) //eslint-disable-line no-console
 		}
 
-		return json
+		return data
 	})
 }
 
 const APIUtil = {
+	failOnError(data){
+		if (data.status !== 'ok') throw Error(data.value || 'Error sending requests.')
+		return data
+	},
+
 	postEvent({ draftId, action, eventVersion, visitId, payload = {} }) {
 		return (
 			API.post('/api/events', {

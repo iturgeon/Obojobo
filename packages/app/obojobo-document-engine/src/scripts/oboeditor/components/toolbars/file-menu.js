@@ -12,28 +12,244 @@ const { Dialog } = Common.components.modal
 const { ModalUtil } = Common.util
 
 class FileMenu extends React.PureComponent {
+
+	openDraftInTab(draftId) {
+		window.open(`${window.location.origin}/editor/visual/${draftId}`, '_blank')
+	}
+
+	closeWindow(){
+		window.close()
+	}
+
+	displayNewDraftErrorDialog(){
+		const dialogProps = {
+			title: 'Error Creating Module',
+			children: 'The request to create a new module failed.',
+			buttons: [
+				{
+					value: 'Close',
+					altAction: true,
+					onClick: ModalUtil.hide
+				},
+				{
+					value: 'Try Again',
+					default: true,
+					onClick: this.createNewDraft.bind(this),
+				}
+			]
+		}
+
+		ModalUtil.show(<Dialog {...dialogProps} />)
+	}
+
+	displayDeleteCompleteDialog(){
+		const dialogProps = {
+			title: 'Deletion Complete',
+			children: 'This module has succesfully been deleted.',
+			buttons: [
+				{
+					value: 'Close',
+					default: true,
+					onClick: this.closeWindow
+				}
+			]
+		}
+
+		ModalUtil.show(<Dialog {...dialogProps} />)
+	}
+
+	displayDeleteErrorDialog(draftId){
+		const dialogProps = {
+			title: 'Error Deleting',
+			children: 'The delete request failed.',
+			buttons: [
+				{
+					value: 'Close',
+					altAction: true,
+					onClick: ModalUtil.hide
+				},
+				{
+					value: 'Open in New Tab',
+					default: true,
+					onClick: () => {this.openDraftInTab(draftId)},
+				}
+			]
+		}
+
+		ModalUtil.show(<Dialog {...dialogProps} />)
+	}
+
+	displayCopyInProgressDialog(newTitle){
+		console.log('prog')
+		const dialogProps = {
+			title: 'Copy Module',
+			preventEsc: true,
+			children: `Copying module to "${newTitle}"`,
+			buttons: []
+		}
+
+		ModalUtil.show(<Dialog {...dialogProps} />)
+	}
+
+	displayCopyCompleteDialog(draftId){
+		const dialogProps = {
+			title: 'Copy Complete',
+			children: 'Would you like to edit the copy now?',
+			buttons: [
+				{
+					value: 'Close',
+					altAction: true,
+					onClick: ModalUtil.hide
+				},
+				{
+					value: 'Open in New Tab',
+					default: true,
+					onClick: () => {this.openDraftInTab(draftId)},
+				}
+			]
+		}
+
+		ModalUtil.show(<Dialog {...dialogProps} />)
+	}
+
+	displayCopyErrorDialog(newTitle){
+		const dialogProps = {
+			title: 'Error',
+			children: 'The copy request failed.',
+			buttons: [
+				{
+					value: 'Cancel',
+					altAction: true,
+					onClick: ModalUtil.hide
+				},
+				{
+					value: 'Try Again',
+					default: true,
+					onClick: () => {this.copyModule(newTitle)},
+				}
+			]
+		}
+
+		ModalUtil.show(<Dialog {...dialogProps} />)
+	}
+
+	displayFileImportDialog(){
+		const dialogProps = {
+			title: 'Import From File',
+			preventEsc: true,
+			children: `Importing replaces the contents of this module. Continue?`,
+			buttons: [
+				{
+					value: 'Cancel',
+					altAction: true,
+					onClick: ModalUtil.hide
+				},
+				{
+					value: 'Yes - Choose file...',
+					default: true,
+					onClick: this.buildFileSelector.bind(this),
+				}
+			]
+		}
+
+		ModalUtil.show(<Dialog {...dialogProps} />)
+	}
+
+	displayDeleteDialog(){
+		const dialogProps = {
+			title: 'Delete Module',
+			children: 'Deleting is permanent, continue?',
+			buttons: [
+				{
+					value: 'Cancel',
+					altAction: true,
+					onClick: ModalUtil.hide
+				},
+				{
+					value: 'Delete Now',
+					isDangerous: true,
+					default: true,
+					onClick: this.deleteModule.bind(this),
+				}
+			]
+		}
+
+		ModalUtil.show(<Dialog {...dialogProps} />)
+	}
+
+	displayCopyPrompt(title){
+		ModalUtil.show(
+			<Prompt
+				title="Copy Module"
+				message="Enter the title for the copied module:"
+				value={title + ' - Copy'}
+				onConfirm={newTitle => this.copyModule(newTitle)}
+			/>
+		)
+	}
+
+	displayUploadError(id, content, type){
+		const dialogProps = {
+			title: 'Error Uploading Module',
+			children: 'The upload request failed.',
+			buttons: [
+				{
+					value: 'Cancel',
+					altAction: true,
+					onClick: ModalUtil.hide
+				},
+				{
+					value: 'Try Again',
+					default: true,
+					onClick: this.processFileContent.bind(this, id, content, type),
+				}
+			]
+		}
+
+		ModalUtil.show(<Dialog {...dialogProps} />)
+	}
+
+	createNewDraft(){
+		return APIUtil.createNewDraft()
+			.then(APIUtil.failOnError)
+			.then(result => {this.openDraftInTab(result.value.id)})
+			.catch(() => {this.displayNewDraftErrorDialog()})
+	}
+
 	deleteModule() {
-		return APIUtil.deleteDraft(this.props.draftId).then(result => {
-			if (result.status === 'ok') {
-				window.close()
-			}
-		})
+		ModalUtil.hide()
+		return APIUtil.deleteDraft(this.props.draftId)
+			.then(APIUtil.failOnError)
+			.then(this.displayDeleteCompleteDialog.bind(this))
+			.catch(() => {this.displayDeleteErrorDialog(this.props.draftId)})
 	}
 
 	copyModule(newTitle) {
-		return APIUtil.copyDraft(this.props.draftId, newTitle).then(result => {
-			ModalUtil.hide()
-			window.open(window.location.origin + '/editor/visual/' + result.value.draftId, '_blank')
-		})
+		console.log('COPY')
+		ModalUtil.hide()
+		this.displayCopyInProgressDialog(newTitle)
+
+		return APIUtil.copyDraft(this.props.draftId, newTitle)
+			.then(APIUtil.failOnError)
+			.then(result => {
+				ModalUtil.hide()
+				this.displayCopyCompleteDialog(result.value.draftId)
+			})
+			.catch(() => {
+				ModalUtil.hide()
+				this.displayCopyErrorDialog(newTitle)
+			})
 	}
 
 	processFileContent(id, content, type) {
-		APIUtil.postDraft(
+		return APIUtil.postDraft(
 			id,
 			content,
 			type === 'application/json' ? 'application/json' : 'text/plain'
-		).then(() => {
-			this.props.reload()
+		).then(APIUtil.failOnError)
+		.then(this.props.reload)
+		.catch(() => {
+			this.displayUploadError(id, content, type)
 		})
 	}
 
@@ -62,7 +278,6 @@ class FileMenu extends React.PureComponent {
 	}
 
 	render() {
-		const url = window.location.origin + '/view/' + this.props.draftId
 		const menu = [
 			{
 				name: 'Save Module',
@@ -72,25 +287,12 @@ class FileMenu extends React.PureComponent {
 			{
 				name: 'New',
 				type: 'action',
-				action: () =>
-					APIUtil.createNewDraft().then(result => {
-						if (result.status === 'ok') {
-							window.open(window.location.origin + '/editor/visual/' + result.value.id, '_blank')
-						}
-					})
+				action: this.createNewDraft.bind(this)
 			},
 			{
 				name: 'Make a copy...',
 				type: 'action',
-				action: () =>
-					ModalUtil.show(
-						<Prompt
-							title="Copy Module"
-							message="Enter the title for the copied module:"
-							value={this.props.title + ' - Copy'}
-							onConfirm={this.copyModule.bind(this)}
-						/>
-					)
+				action: () => {this.displayCopyPrompt(this.props.title)}
 			},
 			{
 				name: 'Download',
@@ -111,54 +313,19 @@ class FileMenu extends React.PureComponent {
 			{
 				name: 'Import from file...',
 				type: 'action',
-				action: () => {
-					const buttons = [
-						{
-							value: 'Cancel',
-							altAction: true,
-							onClick: ModalUtil.hide
-						},
-						{
-							value: 'Yes - Choose file...',
-							onClick: this.buildFileSelector.bind(this),
-							default: true
-						}
-					]
-					ModalUtil.show(
-						<Dialog buttons={buttons} title="Import From File">
-							Importing replaces the contents of this module. Continue?
-						</Dialog>
-					)
-				}
+				action: this.displayFileImportDialog.bind(this)
 			},
 			{
 				name: 'Delete Module...',
 				type: 'action',
-				action: () => {
-					const buttons = [
-						{
-							value: 'Cancel',
-							altAction: true,
-							onClick: ModalUtil.hide
-						},
-						{
-							value: 'Delete Now',
-							isDangerous: true,
-							onClick: this.deleteModule.bind(this),
-							default: true
-						}
-					]
-					ModalUtil.show(
-						<Dialog buttons={buttons} title="Delete Module">
-							Deleting is permanent, continue?
-						</Dialog>
-					)
-				}
+				action: this.displayDeleteDialog.bind(this)
 			},
 			{
 				name: 'Copy LTI Link',
 				type: 'action',
-				action: () => ClipboardUtil.copyToClipboard(url)
+				action: () => {
+					ClipboardUtil.copyToClipboard(`${window.location.origin}/view/${this.props.draftId}`)
+				}
 			}
 		]
 

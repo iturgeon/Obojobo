@@ -19,63 +19,34 @@ jest.mock('../../../../src/scripts/common/util/download-document')
 const CONTENT_NODE = 'ObojoboDraft.Sections.Content'
 const ASSESSMENT_NODE = 'ObojoboDraft.Sections.Assessment'
 
-describe('File Menu', () => {
+describe('FileMenu', () => {
 	beforeEach(() => {
 		EditorStore.state.startingId = null
 		jest.clearAllMocks()
+		APIUtil.failOnError.mockImplementation(data => data)
 	})
 
-	test('File Menu node', () => {
+	test('renders as expected', () => {
 		const component = shallow(<FileMenu draftId="mockDraft" />)
 		const tree = component.html()
 		expect(tree).toMatchSnapshot()
 	})
 
-	test('FileMenu calls save', () => {
-		const model = {
-			flatJSON: () => ({ children: [] }),
-			children: [
-				{
-					get: () => CONTENT_NODE,
-					flatJSON: () => ({ children: [] }),
-					children: { models: [{ get: () => 'mockValue' }] }
-				},
-				{
-					get: () => ASSESSMENT_NODE
-				}
-			]
-		}
+	test('clicking save calls onSave prop', () => {
+		const mockOnSave = jest.fn()
+		const component = mount(<FileMenu draftId="mockDraft" onSave={mockOnSave} />)
 
-		const exportToJSON = jest.fn()
-
-		const component = mount(
-			<FileMenu
-				draftId="mockDraft"
-				model={model}
-				exportToJSON={exportToJSON}
-				onSave={APIUtil.postDraft}
-			/>
-		)
-
-		APIUtil.postDraft.mockResolvedValueOnce({
-			status: 'ok'
-		})
+		expect(mockOnSave).not.toHaveBeenCalledWith('mockDraft')
 
 		component.find({ children: 'Save Module' }).simulate('click')
 
-		APIUtil.postDraft.mockResolvedValueOnce({
-			status: 'error',
-			value: { message: 'mock Error' }
-		})
-
-		component.find({ children: 'Save Module' }).simulate('click')
-
-		expect(APIUtil.postDraft).toHaveBeenCalledTimes(2)
+		expect(mockOnSave).toHaveBeenCalledWith('mockDraft')
 	})
 
-	test('FileMenu calls new', done => {
+	test('clicking new calls APIUtil.createNewDraft', done => {
 		const component = mount(<FileMenu draftId="mockDraft" />)
 
+		jest.spyOn(window, 'open').mockReturnValueOnce()
 		APIUtil.createNewDraft.mockResolvedValueOnce({
 			status: 'ok',
 			value: { id: 'mock-id' }
@@ -83,92 +54,151 @@ describe('File Menu', () => {
 
 		component.find({ children: 'New' }).simulate('click')
 
-		APIUtil.createNewDraft.mockResolvedValueOnce({
-			status: 'error',
-			value: { message: 'mock Error' }
-		})
-
-		component.find({ children: 'New' }).simulate('click')
-
 		setTimeout(() => {
 			component.update()
-			expect(APIUtil.createNewDraft).toHaveBeenCalledTimes(2)
-
+			expect(APIUtil.createNewDraft).toHaveBeenCalledTimes(1)
+			expect(window.open).toHaveBeenCalledWith(
+				'http://localhost:3000/editor/visual/mock-id',
+				'_blank'
+			)
+			expect(ModalUtil.show).not.toHaveBeenCalled()
 			component.unmount()
 			done()
 		})
 	})
 
-	test('FileMenu calls Copy', () => {
-		const model = {
-			title: 'mockTitle'
-		}
+	test('clicking new with api errors', done => {
+		const component = mount(<FileMenu draftId="mockDraft" />)
 
-		const component = mount(<FileMenu draftId="mockDraft" model={model} />)
+		APIUtil.createNewDraft.mockResolvedValueOnce()
+		APIUtil.failOnError.mockResolvedValueOnce()
 
-		component.find({ children: 'Make a copy...' }).simulate('click')
+		component.find({ children: 'New' }).simulate('click')
 
-		expect(ModalUtil.show).toHaveBeenCalled()
+		setTimeout(() => {
+			component.update()
+			expect(APIUtil.createNewDraft).toHaveBeenCalledTimes(1)
+			expect(APIUtil.failOnError).toHaveBeenCalledTimes(1)
+			expect(ModalUtil.show.mock.calls[0][0]).toMatchInlineSnapshot(`
+			<Dialog
+			  buttons={
+			    Array [
+			      Object {
+			        "altAction": true,
+			        "onClick": [MockFunction],
+			        "value": "Close",
+			      },
+			      Object {
+			        "default": true,
+			        "onClick": [Function],
+			        "value": "Try Again",
+			      },
+			    ]
+			  }
+			  centered={true}
+			  title="Error Creating Module"
+			>
+			  The request to create a new module failed.
+			</Dialog>
+		`)
+			component.unmount()
+			done()
+		})
 	})
 
-	test('FileMenu calls Download', done => {
-		// setup
-		const model = {
-			title: 'mockTitle'
-		}
+	const expectComponentWithProps = (comp, props) => {
+		// @TODO: can we test this is a react component?
+		Object.entries(props).forEach(([key, value]) => {
+			expect(comp.props).toHaveProperty(key, value)
+		})
+	}
 
+	test.only('clicking copy shows copy prompt', () => {
+		const copyModule = jest.spyOn(FileMenu.prototype, 'copyModule')
+		const component = mount(<FileMenu draftId="mockDraft" title="Mock Title" />)
+		APIUtil.copyDraft.mockResolvedValueOnce()
+		copyModule.mockReturnValueOnce(3)
+		component.find({ children: 'Make a copy...' }).simulate('click')
+
+		const copyPrompt = ModalUtil.show.mock.calls[0][0]
+		expectComponentWithProps(copyPrompt, { title: 'Copy Module', value: 'Mock Title - Copy' })
+	})
+
+	test.only('clicking copy confirm shows complete dialog', () => {
+		expect.assertions(5)
+		const component = mount(<FileMenu draftId="mockDraft" />)
+		APIUtil.copyDraft.mockResolvedValueOnce({
+			status: 'ok',
+			value: {
+				draftId: 'new-copy-draft-id'
+			}
+		})
+		component.find({ children: 'Make a copy...' }).simulate('click')
+		const copyPrompt = ModalUtil.show.mock.calls[0][0]
+		expectComponentWithProps(copyPrompt, { title: 'Copy Module' })
+
+		return copyPrompt.props.onConfirm('new title').then(() => {
+			expect(APIUtil.copyDraft).toHaveBeenCalledTimes(1)
+			expect(APIUtil.failOnError).toHaveBeenCalledTimes(1)
+			expect(ModalUtil.show).toHaveBeenCalledTimes(3)
+			const copyDoneDialog = ModalUtil.show.mock.calls[2][0]
+			expectComponentWithProps(copyDoneDialog, {title: 'Copy Complete'})
+		})
+	})
+
+	test('clicking download ', done => {
+		// setup
 		APIUtil.getFullDraft.mockResolvedValueOnce('')
 		APIUtil.getFullDraft.mockResolvedValueOnce('{ "item": "value" }')
 
 		// render
-		const component = mount(<FileMenu draftId="mockDraft" model={model} />)
+		const component = mount(<FileMenu draftId="mockDraft" />)
 
-		// get references to buttons
-		const downloadXmlButton = component.find({ children: 'XML Document (.xml)' })
-		const downloadJSONButton = component.find({ children: 'JSON Document (.json)' })
-
-		// click
-		downloadJSONButton.simulate('click')
-		downloadXmlButton.simulate('click')
+		// click each download
+		component.find({ children: 'JSON Document (.json)' }).simulate('click')
+		component.find({ children: 'XML Document (.xml)' }).simulate('click')
 
 		setTimeout(() => {
 			component.update()
-			expect(downloadDocument.mock.calls).toMatchInlineSnapshot(`
-			Array [
-			  Array [
-			    "mockDraft",
-			    "json",
-			  ],
-			  Array [
-			    "mockDraft",
-			    "xml",
-			  ],
-			]
-		`)
-
+			expect(downloadDocument).toHaveBeenCalledWith('mockDraft', 'json')
+			expect(downloadDocument).toHaveBeenCalledWith('mockDraft', 'xml')
 			component.unmount()
 			done()
 		})
 	})
 
 	test('FileMenu calls Delete', () => {
-		const model = {
-			title: 'mockTitle'
-		}
-
-		const component = mount(<FileMenu draftId="mockDraft" model={model} />)
+		const component = mount(<FileMenu draftId="mockDraft" />)
 
 		component.find({ children: 'Delete Module...' }).simulate('click')
 
-		expect(ModalUtil.show).toHaveBeenCalled()
+		expect(ModalUtil.show.mock.calls[0][0]).toMatchInlineSnapshot(`
+		<Dialog
+		  buttons={
+		    Array [
+		      Object {
+		        "altAction": true,
+		        "onClick": [MockFunction],
+		        "value": "Cancel",
+		      },
+		      Object {
+		        "default": true,
+		        "isDangerous": true,
+		        "onClick": [Function],
+		        "value": "Delete Now",
+		      },
+		    ]
+		  }
+		  centered={true}
+		  title="Delete Module"
+		>
+		  Deleting is permanent, continue?
+		</Dialog>
+	`)
 	})
 
 	test('FileMenu calls Copy LTI Link', () => {
-		const model = {
-			title: 'mockTitle'
-		}
-
-		const component = mount(<FileMenu draftId="mockDraft" model={model} />)
+		const component = mount(<FileMenu draftId="mockDraft" />)
 
 		component.find({ children: 'Copy LTI Link' }).simulate('click')
 
@@ -177,29 +207,11 @@ describe('File Menu', () => {
 
 	test('copyModule calls copyDraft api', () => {
 		expect.hasAssertions()
-		const model = {
-			flatJSON: () => ({ children: [] }),
-			children: [
-				{
-					get: () => CONTENT_NODE,
-					flatJSON: () => ({ children: [] }),
-					children: { models: [{ get: () => 'mockValue' }] }
-				},
-				{
-					get: () => ASSESSMENT_NODE
-				}
-			]
-		}
 
 		const exportToJSON = jest.fn()
 
 		const component = mount(
-			<FileMenu
-				draftId="mockDraftId"
-				model={model}
-				exportToJSON={exportToJSON}
-				onSave={jest.fn()}
-			/>
+			<FileMenu draftId="mockDraftId" exportToJSON={exportToJSON} onSave={jest.fn()} />
 		)
 
 		APIUtil.copyDraft.mockResolvedValueOnce({

@@ -66,6 +66,7 @@ router
 	.post([requireCanPreviewDrafts, requireCurrentUser])
 	.post(async (req, res) => {
 		try {
+			// throw Error('NOPE')
 			const userId = req.currentUser.id
 			const draftId = req.params.draftId
 
