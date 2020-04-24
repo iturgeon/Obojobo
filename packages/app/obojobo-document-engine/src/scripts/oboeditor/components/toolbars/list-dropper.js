@@ -1,13 +1,15 @@
 	import './list-dropper.scss'
 
 import React from 'react'
-import { Editor, Element } from 'slate'
+import { Editor, Element, Transforms, Range } from 'slate'
 import isOrNot from 'obojobo-document-engine/src/scripts/common/util/isornot'
 import OrderedListIcon from '../../assets/ordered-list-icon'
 import UnorderedListIcon from '../../assets/unordered-list-icon'
 
 const LIST_NODE = 'ObojoboDraft.Chunks.List'
 const TEXT_NODE = 'ObojoboDraft.Chunks.Text'
+const LIST_LEVEL_NODE = 'ObojoboDraft.Chunks.List.Level'
+const LIST_LINE_NODE = 'ObojoboDraft.Chunks.List.Line'
 
 class ListDropper extends React.Component {
 	constructor(props) {
@@ -19,7 +21,7 @@ class ListDropper extends React.Component {
 
 		this.timeOutId = null
 		this.menu = []
-		this.toggleLevelSelect = this.toggleLevelSelect.bind(this)
+		this.toggleDropDown = this.toggleDropDown.bind(this)
 		this.onBlurHandler = this.onBlurHandler.bind(this)
 		this.onFocusHandler = this.onFocusHandler.bind(this)
 		this.onKeyDown = this.onKeyDown.bind(this)
@@ -82,41 +84,47 @@ class ListDropper extends React.Component {
 		}
 	}
 
-	toggleLevelSelect() {
+	toggleDropDown() {
 		this.setState(state => {
 			return { isOpen: !state.isOpen }
 		})
 	}
 
+	// turn all selected nodes into a list
+	// set the type and bullet style at the same time
 	changeBullet(bulletStyle) {
 		this.props.editor.changeToType(LIST_NODE, { type: this.props.type, bulletStyle })
 	}
 
 	toggleBullet() {
+		// collect all the chunks in the selection
 		const nodes = Array.from(Editor.nodes(this.props.editor, {
 			mode: 'lowest',
 			match: node => Element.isElement(node) && !this.props.editor.isInline(node) && !node.subtype
 		}))
-		const isList = nodes.every(([block]) => block.type === LIST_NODE)
 
-		if(!isList) {
-			return this.props.editor.changeToType(LIST_NODE, { type: this.props.type, bulletStyle: this.props.defaultStyle })
+		let areAllLists = true
+		let areAllSameType = true
+
+		nodes.forEach(([block]) => {
+			areAllLists = areAllLists && block.type === LIST_NODE
+			areAllSameType = areAllSameType && block.content.listStyles && block.content.listStyles.type === this.props.type
+		})
+
+		if (areAllLists && areAllSameType) {
+			// everything is already a list - convert it back to text
+			this.props.editor.changeToType(TEXT_NODE)
+		} else {
+			// if they are not all lists, do what changeBullet does
+			this.changeBullet(this.props.defaultStyle)
 		}
 
-		// Once we know they are all lists, we can check if the lists are the same type
-		// as the list we are changing to
-		const isSameType = nodes.every(([block]) => block.content.listStyles.type === this.props.type)
-		if(!isSameType) {
-			return this.props.editor.changeToType(LIST_NODE, { type: this.props.type, bulletStyle: this.props.defaultStyle })
-		}
-
-		this.props.editor.changeToType(TEXT_NODE)
 	}
 
 	render() {
 		return (
-			<div 
-				className={'list-dropper'} 
+			<div
+				className={'list-dropper'}
 				contentEditable={false}
 				onBlur={this.onBlurHandler}
 				onFocus={this.onFocusHandler}
@@ -128,16 +136,16 @@ class ListDropper extends React.Component {
 					aria-label={this.props.type + ' list'}>
 					{this.props.type === 'ordered' ? <OrderedListIcon /> : <UnorderedListIcon />}
 				</button>
-				<button 
+				<button
 					className={'dropdown ' + isOrNot(this.state.isOpen, 'open')}
-					onClick={this.toggleLevelSelect}
+					onClick={this.toggleDropDown}
 					ref={this.menuButton}
 					aria-label={'Open ' + this.props.type + ' list type menu'}>
 					{'⌃'}
 				</button>
 				<div className={'list-dropper-menu ' + isOrNot(this.state.isOpen, 'open')}>
 					{this.props.bullets.map(bullet => (
-						<button 
+						<button
 							key={bullet.bulletStyle}
 							onClick={this.changeBullet.bind(this, bullet.bulletStyle)}
 							ref={item => {

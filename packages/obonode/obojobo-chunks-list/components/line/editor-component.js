@@ -7,11 +7,8 @@ const Line = ({ element, children }) => {
 	if (element.content && element.content.hangingIndent) {
 		attr['data-hanging-indent'] = element.content.hangingIndent
 	}
-	return (
-		<div>
-			<li {...attr}>{children}</li>
-		</div>
-	)
+
+	return <li {...attr}>{children}</li>
 }
 
 export default Line

@@ -4,6 +4,7 @@ const LIST_LEVEL_NODE = 'ObojoboDraft.Chunks.List.Level'
 const LIST_LINE_NODE = 'ObojoboDraft.Chunks.List.Line'
 
 const onBackspace = (entry, editor, event) => {
+	console.log("BACKSPACE")
 	const [, nodePath] = entry
 	const nodeRange = Editor.range(editor, nodePath)
 	const [startLine] = Array.from(Editor.nodes(editor, {
@@ -15,7 +16,7 @@ const onBackspace = (entry, editor, event) => {
 	// If we are deleting multiple things or the line is not empty, stop here
 	// Returning before the preventDefault allows Slate to handle the delete
 	if (!Range.isCollapsed(editor.selection) || Node.string(lineNode) !== '') {
-		return 
+		return
 	}
 
 	// Get the deepest level that contains this line

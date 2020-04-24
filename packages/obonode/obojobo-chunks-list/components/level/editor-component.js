@@ -2,28 +2,25 @@ import '../../viewer-component.scss'
 
 import React from 'react'
 
-class Level extends React.Component {
-	constructor(props) {
-		super(props)
+const Level = ({element, children}) => {
+	const List = element.content.type === 'unordered' ? 'ul' : 'ol'
+	const listStyle = {
+		listStyleType: element.content.bulletStyle
 	}
 
-	getListStyle() {
-		return {
-			listStyleType: this.props.element.content.bulletStyle
-		}
-	}
+	return (
+		<List style={listStyle} data-type="Level">
+			{children}
+		</List>
+	)
 
-	renderList() {
-		if (this.props.element.content.type === 'unordered') {
-			return <ul style={this.getListStyle()}>{this.props.children}</ul>
-		} else {
-			return <ol style={this.getListStyle()}>{this.props.children}</ol>
-		}
-	}
-
-	render() {
-		return <div>{this.renderList()}</div>
-	}
+	// return (
+	// 	<li style={{'list-style': 'none'}}>
+	// 		<List style={listStyle}>
+	// 			{children}
+	// 		</List>
+	// 	</li>
+	// )
 }
 
 export default Level

@@ -4,6 +4,7 @@ const TEXT_NODE = 'ObojoboDraft.Chunks.Text'
 const LIST_LINE_NODE = 'ObojoboDraft.Chunks.List.Line'
 
 const insertText = (entry, editor, event) => {
+	console.log("WRAP LEVEL")
 	const [, nodePath] = entry
 	const nodeRange = Editor.range(editor, nodePath)
 	const [startLine] = Array.from(Editor.nodes(editor, {
@@ -12,12 +13,12 @@ const insertText = (entry, editor, event) => {
 	}))
 	const [lineNode, linePath] = startLine
 
-	// If we are deleting multiple things, if the line is not empty, 
+	// If we are deleting multiple things, if the line is not empty,
 	// or if we are not at end of List, stop here
 	// Returning before the preventDefault allows Slate to handle the enter
-	if (!Range.isCollapsed(editor.selection) || 
+	if (!Range.isCollapsed(editor.selection) ||
 		Node.string(lineNode) !== '' ||
-		!Editor.isEnd(editor, editor.selection.focus, nodeRange)) return 
+		!Editor.isEnd(editor, editor.selection.focus, nodeRange)) return
 
 	event.preventDefault()
 

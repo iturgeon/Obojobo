@@ -25,6 +25,7 @@ const CODE_LINE_NODE = 'ObojoboDraft.Chunks.Code.CodeLine'
  * @returns {Object} An Obojobo List node
  */
 const flattenLevels = (node, currLevel, textGroup, indents) => {
+	console.log('FLATTEN')
 	const indent = node.content
 
 	node.children.forEach(child => {
@@ -34,8 +35,12 @@ const flattenLevels = (node, currLevel, textGroup, indents) => {
 		}
 
 		const listLine = {
-			text: { value: '', styleList: [] },
-			data: { indent: currLevel, hangingIndent: child.content.hangingIndent }
+			text: { value: ''},
+			data: { indent: currLevel }
+		}
+
+		if(child.content && typeof child.content.hangingIndent !== 'undefined') {
+			listLine.data.hangingIndent = child.content.hangingIndent
 		}
 
 		TextUtil.slateToOboText(child, listLine)
@@ -55,8 +60,9 @@ const flattenLevels = (node, currLevel, textGroup, indents) => {
  * @returns {Object} An Obojobo List node
  */
 const slateToObo = node => {
+	console.log('slateToObo')
 	const textGroup = []
-	const indents = []
+	const indents = {}
 
 	node.children.forEach(level => {
 		flattenLevels(level, 0, textGroup, indents)
@@ -84,6 +90,7 @@ const slateToObo = node => {
  * @returns {Object} A normlized Slate list node
  */
 const normalizeJSON = json => {
+	console.log('normalizeJSON')
 	// Do not consolidate lines
 	if (json.subtype === LIST_LINE_NODE) return json
 
@@ -114,6 +121,8 @@ const normalizeJSON = json => {
  * @returns {Object} A Slate node
  */
 const oboToSlate = node => {
+	console.log('oboToSlate')
+	// debugger
 	const slateNode = Object.assign({}, node)
 	const type = node.content.listStyles.type
 	const bulletList =
@@ -125,8 +134,7 @@ const oboToSlate = node => {
 	if (!slateNode.content.listStyles.indents) slateNode.content.listStyles.indents = {}
 
 	slateNode.children = node.content.textGroup.map(line => {
-		let indent = line.data ? line.data.indent : 0
-		const hangingIndent = line.data ? line.data.hangingIndent : false
+		let indent = (line.data && line.data.indent) ? parseInt(line.data.indent, 10) : 0
 		let style = node.content.listStyles.indents[indent] || { type, bulletStyle: bulletList[indent] }
 		let listLine = {
 			type: LIST_NODE,
@@ -136,10 +144,14 @@ const oboToSlate = node => {
 				{
 					type: LIST_NODE,
 					subtype: LIST_LINE_NODE,
-					content: { hangingIndent },
+					content: {},
 					children: TextUtil.parseMarkings(line)
 				}
 			]
+		}
+
+		if (line.data && typeof line.data.hangingIndent !== 'undefined'){
+			listLine.children[0].content.hangingIndent = line.data.hangingIndent
 		}
 
 		while (indent > 0) {
@@ -294,6 +306,101 @@ const switchType = {
 		})
 	},
 	'ObojoboDraft.Chunks.List': (editor, [node, path], data) => {
+		console.log('CONVERT TO LIST')
+
+		console.log('CHANGE BULLET')
+
+		// locate the selections containing list node
+		const listNodes = Array.from(Editor.nodes(editor, {
+			mode: 'lowest',
+			match: node => node.type === LIST_NODE && !node.subtype
+		}))
+
+		const [listNode, listPath] = listNodes[0]
+
+		// // calc depth, path.length - the depth of the parent list - 1 (for zero indexing)
+		// const indentDepth = levelPath.length - listPath.length - 1
+		const newIndents = {... listNode.content.listStyles.indents}
+
+		// Gather all the lowest line nodes, closest to the text selection
+		// I haven't found a way to search for level nodes directly
+		// I think because they can contain other levels
+		const selectedLineNodes = Editor.nodes(editor, {
+			match: node => node.subtype === LIST_LINE_NODE,
+			mode: 'lowest'
+		})
+
+		// use the line nodes to collect which depths need to
+		// be adjusted - we're assuming here that each line node's parent
+		// is a level node, which has a bullet style
+		// we'll figure out what depth each of those level nodes and set
+		// it to the requested setting in the list's listStyle.indents object
+		for(const [, linePath] of selectedLineNodes){
+			const [, levelPath] = Editor.parent(editor, linePath)
+			// depthsToChange.add(levelPath.length - listPath.length - 1)
+			const depth = levelPath.length - listPath.length - 1
+			newIndents[depth] = {type: data.type, bulletStyle: data.bulletStyle }
+		}
+
+
+		// get the lowest level nodes in the selection
+		// const levelNodes = Array.from(Editor.nodes(editor, {
+		// 	mode: 'lowest',
+		// 	match: node => node.subtype === LIST_LEVEL_NODE
+		// }))
+
+
+
+		// const [levelNode, levelPath] = levelNodes[0]
+
+
+		// const newIndent = {
+		// 	type: this.props.type,
+		// 	bulletStyle
+		// }
+
+
+		const newSettings = {
+			content: {
+				textGroup: {},
+				listStyles: {
+					type: listNode.content.listStyles.type,
+					indents: newIndents
+				}
+			}
+		}
+
+
+		Editor.withoutNormalizing(editor, () => {
+			// update the list
+			Transforms.setNodes(
+				editor,
+				newSettings,
+				{ at: listPath }
+			)
+
+			// search for all level nodes inside this list
+			// so we can force them to redraw their bullets + li/ul tag
+			// IDEA: we could limit this to only level nodes with a depth that changed?
+			const levelNodes = Editor.nodes(editor, {
+				mode: 'all',
+				at: listPath,
+				match: node => node.subtype === LIST_LEVEL_NODE
+			})
+
+			for(const [levelNode, levelPath] of levelNodes){
+				Transforms.setNodes(
+					editor,
+					{ content: {...levelNode.content}},
+					{ at: levelPath }
+				)
+			}
+
+		})
+
+		return
+
+		// debugger
 		const nodeRange = Editor.range(editor, path)
 		const swapType = data.type !== node.content.listStyles.type
 

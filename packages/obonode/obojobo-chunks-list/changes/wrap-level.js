@@ -1,13 +1,15 @@
 import { Editor, Transforms, Range } from 'slate'
 import ListStyles from '../list-styles'
+import getListIndentForNode from '../util/get-list-indent-for-node'
 
 const LIST_NODE = 'ObojoboDraft.Chunks.List'
 const LIST_LEVEL_NODE = 'ObojoboDraft.Chunks.List.Level'
 const LIST_LINE_NODE = 'ObojoboDraft.Chunks.List.Line'
 
 const wrapLevel = (entry, editor, event) => {
+	console.log("WRAP LEVEL")
 	event.preventDefault()
-	const [, nodePath] = entry
+	const [node, nodePath] = entry
 	const nodeRange = Editor.range(editor, nodePath)
 
 	const list = Array.from(
@@ -32,15 +34,18 @@ const wrapLevel = (entry, editor, event) => {
 				parent.content.type === ListStyles.TYPE_UNORDERED
 					? ListStyles.UNORDERED_LIST_BULLETS
 					: ListStyles.ORDERED_LIST_BULLETS
-			const bulletStyle =
-				bulletList[(bulletList.indexOf(parent.content.bulletStyle) + 1) % bulletList.length]
+			const indexOfNextStyle = (bulletList.indexOf(parent.content.bulletStyle) + 1) % bulletList.length
+			const bulletStyle = bulletList[indexOfNextStyle]
 
+			const content = getListIndentForNode(node, nodePath)
+			console.log('xXxXxXxXxXx WRAP LEVEL SET CONTENT')
+			console.log(content)
 			Transforms.wrapNodes(
 				editor,
 				{
 					type: LIST_NODE,
 					subtype: LIST_LEVEL_NODE,
-					content: { type: parent.content.type, bulletStyle }
+					content
 				},
 				{
 					at: path

@@ -6,6 +6,7 @@ const LIST_LEVEL_NODE = 'ObojoboDraft.Chunks.List.Level'
 const LIST_LINE_NODE = 'ObojoboDraft.Chunks.List.Line'
 
 const wrapLevelOrTab = (entry, editor, event) => {
+	console.log('WRAP OR TAB')
 	event.preventDefault()
 	const [, nodePath] = entry
 	const nodeRange = Editor.range(editor, nodePath)
