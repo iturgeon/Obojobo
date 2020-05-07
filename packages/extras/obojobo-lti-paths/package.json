@@ -1,0 +1,35 @@
+{
+	"name": "obojobo-lti-paths",
+	"license": "AGPL-3.0-only",
+	"version": "8.0.2",
+	"repository": "https://github.com/ucfopen/Obojobo.git",
+	"homepage": "https://ucfopen.github.io/Obojobo-Docs/",
+	"description": "Obojobo express server middleware.",
+	"scripts": {
+		"test": "TZ='America/New_York' jest",
+		"test:ci": "TZ='America/New_York' CI=true jest --ci --coverage --coverageReporters text-summary cobertura",
+		"lint": "yarn lint:js && yarn lint:css",
+		"lint:js": "eslint .",
+		"lint:css": "echo 'not implemented'",
+		"prettier:run": "prettier --write '**/*.{js,scss}'",
+		"precommit": "lint-staged"
+	},
+	"engines": {
+		"node": "^12.11.1"
+	},
+	"lint-staged": {
+		"**/*.scss": [
+			"stylelint"
+		],
+		"**/*.{js,scss}": [
+			"prettier --write",
+			"git add"
+		]
+	},
+	"dependencies": {
+		"oauth-signature": "^1.5.0",
+		"obojobo-express": "^8.0.2"
+	},
+	"devDependencies": {
+	}
+}

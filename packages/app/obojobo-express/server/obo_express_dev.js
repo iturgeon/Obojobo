@@ -3,6 +3,10 @@ const config = require('./config')
 const oauthKey = Object.keys(config.lti.keys)[0]
 const oauthSecret = config.lti.keys[oauthKey]
 
+
+// @TODO: tell node to bypass certificate authroization locally
+process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = 0;
+
 const ltiInstructor = {
 	lis_person_contact_email_primary: 'zach@obojobo.com',
 	lis_person_name_family: 'Berry',
@@ -107,6 +111,7 @@ module.exports = app => {
 				<li>LTI Course Nav: <a href="/lti/dev/launch/course_navigation?resource_link_id=whatever-you-want"">Instructor</a> <a href="/lti/dev/launch/course_navigation?student=1&resource_link_id=whatever-you-want"">Student</a></li>
 				<li>LTI Resource Selection: (iframe) <a href="#" onClick="launchInIframe('/lti/dev/launch/resource_selection')">Instructor</a> <a href="#" onClick="launchInIframe('/lti/dev/launch/resource_selection?student=1')">Student</a></li>
 				<li>LTI Assignment: <a href="/lti/dev/launch/view?resource_link_id=whatever-you-want">Instructor</a> <a href="/lti/dev/launch/view?student=1&resource_link_id=whatever-you-want">Student</a></li>
+				<li>LTI Tree Assignment: <a href="/lti/dev/launch/tree?resource_link_id=whatever-you-want">Instructor</a> <a href="/lti/dev/launch/tree?student=1&resource_link_id=whatever-you-want">Student</a></li>
 				<li><a href="/profile">Whoami</a></li>
 				<li><a href="/profile/logout">Logout</a></li>
 			</ul>
@@ -182,7 +187,20 @@ module.exports = app => {
 		renderLtiLaunch({ ...person, ...params }, method, endpoint, res)
 	})
 
-	ltiLearner
+	// builds a valid document view lti launch and submits it
+	app.get('/lti/dev/launch/tree', (req, res) => {
+		const resource_link_id = req.query.resource_link_id || defaultResourceLinkId
+		const person = req.query.student ? ltiLearner : ltiInstructor
+		const method = 'POST'
+		const endpoint = `${baseUrl(req)}/lti-paths/launch/7e74b56a-c253-45c7-bd14-e36a303c6fcb`
+		const params = {
+			lis_outcome_service_url: 'https://example.fake/outcomes/fake',
+			lti_message_type: 'basic-lti-launch-request',
+			lti_version: 'LTI-1p0',
+			resource_link_id
+		}
+		renderLtiLaunch({ ...person, ...params }, method, endpoint, res)
+	})
 
 	// builds a valid resourse selection lti launch and submits it
 	app.get('/lti/dev/launch/resource_selection', (req, res) => {
