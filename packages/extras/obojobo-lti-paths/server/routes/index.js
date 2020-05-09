@@ -319,21 +319,21 @@ router
 router
 	.route('/lti-paths/score-passback/:userId/:pathId/:nodeId/')
 	.post(async (req, res, next) => {
-		console.log(req.body)
 		// @TODO validate lti signature
 
 		const path = fetchPathById(req.params.pathId)
 		const state = fetchOrCreateUserPathState(path.id, req.params.userId)
 		const node = fetchPathNodeById(path, req.params.nodeId)
 
+		const score = parseInt(parseFloat(req.body.imsx_POXEnvelopeRequest.imsx_POXBody[0].replaceResultRequest[0].resultRecord[0].result[0].resultScore[0].textString[0]) * 100, 10)
 
 		// @TODO WRITE TO DB
 		if(!state.nodeStates[node.id]) state.nodeStates[node.id] = {}
-		state.nodeStates[node.id].score = 1
+		state.nodeStates[node.id].score = score
 		console.log(state)
 
 		const viewParams = {
-			score: 1,
+			score: score,
 			messageId: '@TODO',
 			id: '@TODO',
 			messageRefId: '@TODO',

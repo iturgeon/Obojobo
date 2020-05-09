@@ -29,6 +29,8 @@ module.exports = app => {
 	app.use(bodyParser.json(config.general.bodyParser.jsonOptions))
 	app.use(bodyParser.urlencoded(config.general.bodyParser.urlencodedOptions))
 	app.use(bodyParser.text(config.general.bodyParser.textOptions))
+	require('body-parser-xml')(bodyParser);
+	app.use(bodyParser.xml());
 
 	app.use(
 		session({
