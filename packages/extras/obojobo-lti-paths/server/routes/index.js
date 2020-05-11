@@ -24,7 +24,7 @@ const ltiPathsTABLE = [
 		pathNodes: [
 			{
 				id: '76d1cf0a-c0a7-4b03-b1b6-24e54dec60c0',
-				type: 'connector',
+				type: NODE_TYPE_CONNECTOR,
 				title: 'Begin',
 				typeSettings:{
 					fn: 'a-or-b',
@@ -39,7 +39,7 @@ const ltiPathsTABLE = [
 			},
 			{
 				id: 'b3f41605-6000-43d9-b239-fb40758dfcbf',
-				type: 'launch',
+				type: NODE_TYPE_LAUNCH,
 				title: 'Module A',
 				typeSettings: {
 					ltiConfigId: '94e426f8-7ae2-4266-af25-ff47e88d03fb',
@@ -51,7 +51,7 @@ const ltiPathsTABLE = [
 			},
 			{
 				id: 'cc6d6e59-e4c3-41c5-b5cf-0524417e0578',
-				type: 'launch',
+				type: NODE_TYPE_LAUNCH,
 				title: 'Module B',
 				typeSettings: {
 					ltiConfigId: '94e426f8-7ae2-4266-af25-ff47e88d03fb',
@@ -63,7 +63,7 @@ const ltiPathsTABLE = [
 			},
 			{
 				id: '7d4cb20d-4b33-46dd-b4f3-d1b0d5e1669a',
-				type: 'connector',
+				type: NODE_TYPE_FINISH,
 				title: 'Finish',
 				typeSettings: {
 					fn: 'finish',
@@ -104,7 +104,7 @@ const getRandomInt = max => {
 	return Math.floor(Math.random() * Math.floor(max+1));
 }
 
-const connectorAorB = (node, path, state) => {
+const connectorFnAorB = (node, path, state) => {
 	const settings = node.typeSettings
 	let nextId
 	if(settings.sticky === true){
@@ -126,18 +126,28 @@ const connectorAorB = (node, path, state) => {
 		// * ask an api?
 	}
 
+	// @TODO save state to db
+	if(!state.nodeStates[node.id]) state.nodeStates[node.id] = {}
+	state.nodeStates[node.id].selectedId = nextId
+	state.currentNodeId = nextId
+
 	return nextId
 }
 
-const connectorFinish = (node, path, state) => {
+const connectorFnFinish = (node, path, state) => {
+	return node.id
+}
 
+const connectorFnLaunch = (node, path, state) => {
+	return node.id
 }
 
 const connectorFnMap = new Map()
-connectorFnMap.set('a-or-b', connectorAorB)
-connectorFnMap.set('finish', connectorFinish)
+connectorFnMap.set('a-or-b', connectorFnAorB)
+connectorFnMap.set('launch', connectorFnLaunch)
+connectorFnMap.set('finish', connectorFnFinish)
 
-const obojoboUserProvider = (ltiBody, config) => {
+const obojoboUserProviderFromLaunch = (ltiBody, config) => {
 	// Save/Create a user based on lti launch params
 	const newUser = new User({
 		username: ltiBody[config.usernameParam],
@@ -150,10 +160,15 @@ const obojoboUserProvider = (ltiBody, config) => {
 	return newUser.saveOrCreate()
 }
 
+const obojoboUserProviderFromId = id => {
+	// Save/Create a user based on lti launch params
+	return User.fetchById(id)
+}
 
-const calculateNextNode = (path, state) => {
+
+const calculateCurrentNode = (path, state) => {
 	let currentNode
-	let nextNode
+	let selectedNode
 
 	if(state.currentNodeId){
 		currentNode = fetchPathNodeById(path, state.currentNodeId)
@@ -162,19 +177,36 @@ const calculateNextNode = (path, state) => {
 		currentNode = fetchPathNodeById(path, path.startNodeId)
 	}
 
+	if(currentNode.type === NODE_TYPE_LAUNCH){
+		if(state.nodeStates && state.nodeStates[currentNode.id] && state.nodeStates[currentNode.id].score >= 0 ){
+			currentNode = fetchPathNodeById(path, currentNode.next[0])
+		}
+	}
+
 	// @TODO this may need to be recursive?
 	if(currentNode.type === NODE_TYPE_CONNECTOR){
 		const connectorFn = connectorFnMap.get(currentNode.typeSettings.fn)
-		const nextId = connectorFn(currentNode, path, state)
-		nextNode = path.pathNodes.find(node => node.id === nextId)
-
-		// @TODO save state to db
-		if(!state.nodeStates[currentNode.id]) state.nodeStates[currentNode.id] = {}
-		state.nodeStates[currentNode.id].selectedId = nextNode.id
-		state.currentNodeId = nextNode.id
+		const selectedNodeId = connectorFn(currentNode, path, state)
+		selectedNode = path.pathNodes.find(node => node.id === selectedNodeId)
 	}
 
-	return nextNode || currentNode
+	if(currentNode.type === NODE_TYPE_FINISH){
+		const score = getHighestPathScore(state)
+		state.score = score
+	}
+
+	return selectedNode || currentNode
+}
+
+const getHighestPathScore = state => {
+	let highScore = -1
+	for(const nodeId in state.nodeStates){
+		if(state.nodeStates[nodeId].score && state.nodeStates[nodeId].score > highScore){
+			highScore = state.nodeStates[nodeId].score
+		}
+	}
+
+	return highScore
 }
 
 // constructs a signed lti request and sends it.
@@ -208,10 +240,8 @@ const renderLtiLaunch = (paramsIn, ltiConfig, endpoint, res) => {
 	res.set('Content-Type', 'text/html')
 	res.send(`<html>
 		<body>
-		<h2>LTIPath is launching to:</h2>
-		<h1>${endpoint}</h1>
 		<form id="form" method="${method}" action="${endpoint}" >${htmlInput}</form>
-		<script>setTimeout(() => document.getElementById('form').submit(), 8000)</script>
+		<script>document.getElementById('form').submit()</script>
 		</body></html>`)
 }
 
@@ -252,11 +282,12 @@ const fetchOrCreateUserPathState = (pathId, userId) => {
 
 	// initialize Default State
 	if(!state){
-		console.log('NEW?!', state)
 		state = {
 			pathId,
 			userId,
+			score: null,
 			currentNodeId: null,
+			launch: {},
 			nodeStates: {}
 		}
 		// @TODO: insert into database
@@ -272,21 +303,102 @@ router
 	.route('/lti-paths/launch/:pathId')
 	// .get([requireCanViewEditor, requireCurrentDocument])
 	.post(async (req, res) => {
-		if (!req.lti) {
-			next('Not a valid LTI Launch.')
-		}
 
 		// @TODO: allow other providers here
-		const user = await obojoboUserProvider(req.lti.body, config.lti)
+		const user = await obojoboUserProviderFromLaunch(req.lti.body, config.lti)
 
 		// @TODO: select from database
 		const path = fetchPathById(req.params.pathId)
 
 		const state = fetchOrCreateUserPathState(req.params.pathId, user.id)
 
-		const node = calculateNextNode(path, state)
+		const node = calculateCurrentNode(path, state)
 
-		const proxiedLaunchParams = proxyLaunchParams(req.lti.body)
+		// save lti params to the state
+		state.launch = req.lti.body
+
+		const props = {
+			pathId: path.id,
+			nodeId: node.id,
+			userId: user.id
+		}
+
+		switch(node.type){
+			case NODE_TYPE_FINISH:
+				props.iframeUrl = `/lti-paths/${path.id}/${node.id}/${user.id}/finish`
+				break
+
+			default:
+				const proxiedLaunchParams = proxyLaunchParams(req.lti.body)
+				props.iframeUrl = `/lti-paths/${path.id}/${node.id}/${user.id}/provider-launch`
+				break
+		}
+
+		res.render('student-viewer', {props: JSON.stringify(props)})
+
+
+		// return
+
+		// const thisAppsLaunchParams = {
+		// 	launch_presentation_document_target: 'frame',
+		// 	launch_presentation_locale: 'en-US',
+		// 	// launch_presentation_return_url: `${baseUrl(req)}/lti-paths/score-passback/${path.id}/${node.id}`,
+		// 	lis_course_offering_sourcedid: '@TODO',
+		// 	lis_course_section_sourcedid: '@TODO',
+		// 	lis_outcome_service_url: `${baseUrl(req)}/lti-paths/score-passback/${user.id}/${path.id}/${node.id}`,
+		// 	lis_result_sourcedid: `${user.id}}__${path.id}__${node.id}`,
+		// 	lti_message_type: 'basic-lti-launch-request',
+		// 	lti_version: 'LTI-1p0',
+		// 	resource_link_id: `${req.lti.body.resource_link_id}__${user.id}__${path.id}__${node.id}`,
+		// 	resource_link_title: '@TODO'
+		// }
+
+		// const ltiConfigForNode = getLtiConfigForNode(node)
+
+		// renderLtiLaunch(
+		// 	{ ...thisAppsLaunchParams, ...proxiedLaunchParams },
+		// 	ltiConfigForNode,
+		// 	node.typeSettings.launchUrl,
+		// 	res
+		// )
+	})
+
+
+router
+	.route('/lti-paths/:pathId/:nodeId/:userId/finish')
+	.get((req, res) => {
+		res.render('finish', {})
+	})
+
+
+router
+	.route('/lti-paths/:pathId/:nodeId/:userId/status')
+	.get(async (req, res) => {
+		const user = await obojoboUserProviderFromId(req.params.userId)
+		const path = fetchPathById(req.params.pathId)
+		const node = fetchPathNodeById(path, req.params.nodeId)
+		const state = fetchOrCreateUserPathState(req.params.pathId, user.id)
+		res.json({
+			user,
+			path,
+			node,
+			state
+		})
+	})
+
+
+// @TODO this is insecure - make sure it gets protected
+router
+	.route('/lti-paths/:pathId/:nodeId/:userId/provider-launch')
+	// .get([requireCanViewEditor, requireCurrentDocument])
+	.get(async (req, res) => {
+		// @TODO: allow other providers here
+		const user = await obojoboUserProviderFromId(req.params.userId)
+		const path = fetchPathById(req.params.pathId)
+		const node = fetchPathNodeById(path, req.params.nodeId)
+		const state = fetchOrCreateUserPathState(req.params.pathId, user.id)
+		const ltiConfigForNode = getLtiConfigForNode(node)
+		const proxiedLaunchParams = proxyLaunchParams(state.launch)
 
 		const thisAppsLaunchParams = {
 			launch_presentation_document_target: 'frame',
@@ -294,17 +406,13 @@ router
 			// launch_presentation_return_url: `${baseUrl(req)}/lti-paths/score-passback/${path.id}/${node.id}`,
 			lis_course_offering_sourcedid: '@TODO',
 			lis_course_section_sourcedid: '@TODO',
-			lis_outcome_service_url: `${baseUrl(req)}/lti-paths/score-passback/${user.id}/${path.id}/${node.id}`,
-			lis_result_sourcedid: `${user.id}}__${path.id}__${node.id}`,
+			lis_outcome_service_url: `${baseUrl(req)}/lti-paths/${path.id}/${node.id}/${user.id}/score-passback`,
+			lis_result_sourcedid: `${path.id}__${node.id}__${user.id}`,
 			lti_message_type: 'basic-lti-launch-request',
 			lti_version: 'LTI-1p0',
-			resource_link_id: `${req.lti.body.resource_link_id}__${user.id}__${path.id}__${node.id}`,
+			resource_link_id: `${state.launch.resource_link_id}__${path.id}__${node.id}__${user.id}`,
 			resource_link_title: '@TODO'
 		}
-
-		const ltiConfigForNode = getLtiConfigForNode(node)
-
-		console.log(userPathStateTABLE)
 
 		renderLtiLaunch(
 			{ ...thisAppsLaunchParams, ...proxiedLaunchParams },
@@ -314,23 +422,21 @@ router
 		)
 	})
 
-
-// recieve LTI socre passbacks from anything we launch
+// recieve LTI score passbacks from anything we launch
 router
-	.route('/lti-paths/score-passback/:userId/:pathId/:nodeId/')
+	.route('/lti-paths/:pathId/:nodeId/:userId/score-passback')
 	.post(async (req, res, next) => {
-		// @TODO validate lti signature
 
 		const path = fetchPathById(req.params.pathId)
 		const state = fetchOrCreateUserPathState(path.id, req.params.userId)
 		const node = fetchPathNodeById(path, req.params.nodeId)
 
+		// @TODO validate lti signature
 		const score = parseInt(parseFloat(req.body.imsx_POXEnvelopeRequest.imsx_POXBody[0].replaceResultRequest[0].resultRecord[0].result[0].resultScore[0].textString[0]) * 100, 10)
 
 		// @TODO WRITE TO DB
 		if(!state.nodeStates[node.id]) state.nodeStates[node.id] = {}
 		state.nodeStates[node.id].score = score
-		console.log(state)
 
 		const viewParams = {
 			score: score,
