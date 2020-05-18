@@ -28,7 +28,8 @@
 	},
 	"dependencies": {
 		"oauth-signature": "^1.5.0",
-		"obojobo-express": "^8.0.2"
+		"obojobo-express": "^8.0.2",
+		"react-d3-tree": "^1.16.1"
 	},
 	"devDependencies": {
 	}

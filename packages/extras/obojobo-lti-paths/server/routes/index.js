@@ -58,11 +58,80 @@ const ltiPathsTABLE = [
 					launchUrl: 'https://127.0.0.1:8080/view/9d8d3f46-9063-45cc-9a05-c8ffc6b68dea',
 				},
 				next: [
-					'7d4cb20d-4b33-46dd-b4f3-d1b0d5e1669a'
+					'76d1cf0a-c0a7-4b03-b1b6-24e54dec60gg'
 				]
 			},
 			{
+				id: '76d1cf0a-c0a7-4b03-b1b6-24e54dec60gg',
+				type: NODE_TYPE_CONNECTOR,
+				title: 'ChooseAgain',
+				typeSettings:{
+					fn: 'a-or-b',
+					random: true,
+					sticky: true,
+				},
+				next: [
+					'cc6d6e59-e4c3-41c5-b5cf-0524417e05aa',
+					'cc6d6e59-e4c3-41c5-b5cf-0524417e0eee'
+
+				]
+			},
+			{
+				id: 'cc6d6e59-e4c3-41c5-b5cf-0524417e05aa',
+				type: NODE_TYPE_LAUNCH,
+				title: 'Module E',
+				typeSettings: {
+					ltiConfigId: '94e426f8-7ae2-4266-af25-ff47e88d03fb',
+					launchUrl: 'https://127.0.0.1:8080/view/9d8d3f46-9063-45cc-9a05-c8ffc6b68dea',
+				},
+				next: [
+					'7d4cb20d-4b33-46dd-b4f3-d1b0d5e1669a1'
+				]
+			},
+			{
+				id: 'cc6d6e59-e4c3-41c5-b5cf-0524417e0eee',
+				type: NODE_TYPE_LAUNCH,
+				title: 'Module F',
+				typeSettings: {
+					ltiConfigId: '94e426f8-7ae2-4266-af25-ff47e88d03fb',
+					launchUrl: 'https://127.0.0.1:8080/view/9d8d3f46-9063-45cc-9a05-c8ffc6b68dea',
+				},
+				next: [
+					'7d4cb20d-4b33-46dd-b4f3-d1b0d5e1669a2'
+				]
+			},
+			{
+				id: '7d4cb20d-4b33-46dd-b4f3-d1b0d5e1669a1',
+				type: NODE_TYPE_FINISH,
+				title: 'Finish',
+				typeSettings: {
+					fn: 'finish',
+					ltiScorePassback: true,
+					scoreMode: 'highetst', // average, latest
+				}
+			},
+			{
+				id: '7d4cb20d-4b33-46dd-b4f3-d1b0d5e1669a2',
+				type: NODE_TYPE_FINISH,
+				title: 'Finish',
+				typeSettings: {
+					fn: 'finish',
+					ltiScorePassback: true,
+					scoreMode: 'highetst', // average, latest
+				}
+			},
+			{
 				id: '7d4cb20d-4b33-46dd-b4f3-d1b0d5e1669a',
+				type: NODE_TYPE_FINISH,
+				title: 'Finish',
+				typeSettings: {
+					fn: 'finish',
+					ltiScorePassback: true,
+					scoreMode: 'highetst', // average, latest
+				}
+			},
+			{
+				id: '7d4cb20d-4b33-46dd-b4f3-d1b0d5e16692',
 				type: NODE_TYPE_FINISH,
 				title: 'Finish',
 				typeSettings: {
@@ -323,16 +392,8 @@ router
 			userId: user.id
 		}
 
-		switch(node.type){
-			case NODE_TYPE_FINISH:
-				props.iframeUrl = `/lti-paths/${path.id}/${node.id}/${user.id}/finish`
-				break
-
-			default:
-				const proxiedLaunchParams = proxyLaunchParams(req.lti.body)
-				props.iframeUrl = `/lti-paths/${path.id}/${node.id}/${user.id}/provider-launch`
-				break
-		}
+		const proxiedLaunchParams = proxyLaunchParams(req.lti.body)
+		props.iframeUrl = `/lti-paths/${path.id}/${node.id}/${user.id}/provider-launch`
 
 		res.render('student-viewer', {props: JSON.stringify(props)})
 
@@ -370,6 +431,12 @@ router
 		res.render('finish', {})
 	})
 
+
+router
+	.route('/lti-paths/:pathId/:nodeId/:userId/tree')
+	.get((req, res) => {
+		res.render('tree', {})
+	})
 
 router
 	.route('/lti-paths/:pathId/:nodeId/:userId/status')
